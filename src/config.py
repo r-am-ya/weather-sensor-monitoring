@@ -42,6 +42,9 @@ WINDOW_SIZE = int(os.getenv("WINDOW_SIZE", "10"))
 SENSOR_INTERVAL_SECONDS = float(
     os.getenv("SENSOR_INTERVAL_SECONDS", "2")
 )
+WEATHER_SOURCE = os.getenv("WEATHER_SOURCE", "simulated").strip().lower()
+OPEN_METEO_INTERVAL_SECONDS = max(60, int(os.getenv("OPEN_METEO_INTERVAL_SECONDS", "300")))
+DASHBOARD_REFRESH_SECONDS = max(5, int(os.getenv("DASHBOARD_REFRESH_SECONDS", "15")))
 
 # Model path
 MODEL_PATH = PROJECT_ROOT / "models" / "isolation_forest.joblib"

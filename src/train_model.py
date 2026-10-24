@@ -5,30 +5,33 @@ import joblib
 import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
 
 
 RANDOM_STATE = 42
+FEATURE_NAMES = ["temperature_c", "humidity_pct", "wind_speed_kmh"]
+
+
+def generate_training_data(
+    n_samples: int = 20000, random_state: int = RANDOM_STATE
+) -> np.ndarray:
+    """Generate reproducible synthetic normal inputs used by this demo model."""
+    rng = np.random.default_rng(random_state)
+    return np.column_stack(
+        (
+            rng.uniform(22, 36, n_samples),
+            rng.uniform(30, 90, n_samples),
+            rng.uniform(0, 30, n_samples),
+        )
+    )
 
 
 def main():
-    rng = np.random.default_rng(RANDOM_STATE)
-
     # Generate independent combinations of normal sensor readings.
     # These ranges match the normal ranges in the sensor simulator.
     n_samples = 20000
 
-    X = np.column_stack([
-        rng.uniform(22, 36, n_samples),  # temperature_c
-        rng.uniform(30, 90, n_samples),  # humidity_pct
-        rng.uniform(0, 30, n_samples),   # wind_speed_kmh
-    ])
-
-    feature_names = [
-        "temperature_c",
-        "humidity_pct",
-        "wind_speed_kmh",
-    ]
+    X = generate_training_data(n_samples, RANDOM_STATE)
+    feature_names = FEATURE_NAMES
 
     X_train, X_test = train_test_split(
         X,

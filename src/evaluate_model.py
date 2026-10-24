@@ -164,7 +164,7 @@ def evaluate_model() -> None:
 
     # Evaluate the model already saved by train_model.py.
     saved = joblib.load(MODEL_PATH)
-    saved_model = saved["model"]
+    saved_model = saved.get("model", saved) if isinstance(saved, dict) else saved
 
     results.append(
         report_metrics(

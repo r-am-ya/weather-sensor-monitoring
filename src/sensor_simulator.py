@@ -21,6 +21,7 @@ def _get_weather_state(station_id: str) -> dict[str, float]:
             "temperature_c": random.uniform(25.0, 31.0),
             "humidity_pct": random.uniform(45.0, 75.0),
             "wind_speed_kmh": random.uniform(5.0, 15.0),
+            "wind_direction_deg": random.uniform(0.0, 360.0),
         }
 
     state = _WEATHER_STATE[station_id]
@@ -29,6 +30,7 @@ def _get_weather_state(station_id: str) -> dict[str, float]:
     state["temperature_c"] += random.uniform(-0.35, 0.35)
     state["humidity_pct"] += random.uniform(-1.5, 1.5)
     state["wind_speed_kmh"] += random.uniform(-1.5, 1.5)
+    state["wind_direction_deg"] = (state["wind_direction_deg"] + random.uniform(-12.0, 12.0)) % 360.0
 
     # Keep ordinary weather within plausible simulation bounds.
     state["temperature_c"] = max(
@@ -109,6 +111,7 @@ def generate_reading(
         "temperature_c": round(temperature_c, 2),
         "humidity_pct": round(humidity_pct, 2),
         "wind_speed_kmh": round(wind_speed_kmh, 2),
+        "wind_direction_deg": round(state["wind_direction_deg"], 1),
         "scenario": scenario,
         "is_simulated": True,
     }

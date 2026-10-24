@@ -5,7 +5,7 @@ import json
 import logging
 import math
 from collections import defaultdict, deque
-from datetime import datetime
+from datetime import datetime, timezone
 from statistics import mean
 
 import joblib
@@ -270,7 +270,7 @@ def process_reading(reading: dict) -> dict:
         "sensor_fault": False,
     }
 
-    logger.info(
+    logger.debug(
         "Processed station=%s window=%d scenario=%s "
         "avg_temp=%.2fC avg_humidity=%.2f%% "
         "avg_wind=%.2fkm/h heat_index=%s "
@@ -295,8 +295,8 @@ def run_processor() -> None:
         KAFKA_TOPIC,
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
         group_id=KAFKA_CONSUMER_GROUP,
-        auto_offset_reset="latest",
-        enable_auto_commit=True,
+        auto_offset_reset="earliest",
+        enable_auto_commit=False,
         key_deserializer=lambda key: (
             key.decode("utf-8") if key else None
         ),
@@ -309,12 +309,17 @@ def run_processor() -> None:
         KAFKA_BOOTSTRAP_SERVERS,
     )
 
+    pending_commit = 0
+    total_processed = 0
+    commit_batch_size = 50
     try:
         for message in consumer:
             try:
                 reading = message.value
+                reading["received_timestamp"] = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
                 processed_reading = process_reading(reading)
                 save_reading(processed_reading)
+                total_processed += 1
 
             except (ValueError, TypeError, KeyError, json.JSONDecodeError):
                 logger.exception(
@@ -322,9 +327,16 @@ def run_processor() -> None:
                     message.partition,
                     message.offset,
                 )
+            pending_commit += 1
+            if pending_commit >= commit_batch_size:
+                consumer.commit()
+                logger.info("Committed %d events; %d processed this session", pending_commit, total_processed)
+                pending_commit = 0
 
     except KeyboardInterrupt:
         logger.info("Stopping stream processor.")
+        if pending_commit:
+            consumer.commit()
 
     except KafkaError:
         logger.exception("Kafka consumer encountered an error.")

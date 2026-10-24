@@ -3,6 +3,7 @@
 
 import logging
 from datetime import datetime, timezone
+from threading import Lock
 
 import mysql.connector
 from mysql.connector import Error
@@ -16,11 +17,14 @@ from src.config import (
 )
 
 logger = logging.getLogger(__name__)
+_schema_lock = Lock()
+_schema_ready = False
 
 
 def get_connection():
     """Open a connection to the weather database."""
-    return mysql.connector.connect(
+    global _schema_ready
+    connection = mysql.connector.connect(
         host=MYSQL_HOST,
         port=MYSQL_PORT,
         user=MYSQL_USER,
@@ -28,6 +32,21 @@ def get_connection():
         database=MYSQL_DATABASE,
         connection_timeout=10,
     )
+    if not _schema_ready:
+        with _schema_lock:
+            if not _schema_ready:
+                cursor = connection.cursor()
+                try:
+                    cursor.execute("SHOW COLUMNS FROM weather_readings")
+                    columns = {row[0] for row in cursor.fetchall()}
+                    for name, declaration in (("source_type", "VARCHAR(32) NOT NULL DEFAULT 'simulated'"), ("observation_timestamp", "DATETIME(3) NULL"), ("received_timestamp", "DATETIME(3) NULL"), ("wind_direction_deg", "FLOAT NULL")):
+                        if name not in columns:
+                            cursor.execute(f"ALTER TABLE weather_readings ADD COLUMN {name} {declaration}")
+                    connection.commit()
+                    _schema_ready = True
+                finally:
+                    cursor.close()
+    return connection
 
 
 def parse_timestamp(value: str) -> datetime:
@@ -63,10 +82,12 @@ def save_reading(reading: dict) -> None:
                 temperature_c, humidity_pct, wind_speed_kmh, heat_index_c,
                 rolling_avg_temp_c, rolling_avg_humidity_pct,
                 rolling_avg_wind_kmh, peak_wind_kmh,
-                is_anomaly, anomaly_score, anomaly_scenario
+                is_anomaly, anomaly_score, anomaly_scenario,
+                source_type, observation_timestamp, received_timestamp,
+                wind_direction_deg
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             ON DUPLICATE KEY UPDATE event_id = VALUES(event_id)
         """
@@ -90,6 +111,10 @@ def save_reading(reading: dict) -> None:
                 reading.get("anomaly_score"),
                 reading.get("scenario")
                 or reading.get("anomaly_scenario"),
+                reading.get("source_type", "simulated"),
+                parse_timestamp(reading.get("observation_timestamp", reading["event_timestamp"])),
+                parse_timestamp(reading.get("received_timestamp", reading["event_timestamp"])),
+                reading.get("wind_direction_deg"),
             ),
         )
 
@@ -98,7 +123,7 @@ def save_reading(reading: dict) -> None:
         # normally reports rowcount=0. Do not count duplicate events twice.
         if cursor.rowcount == 0:
             connection.commit()
-            logger.info("Duplicate event ignored: %s", event_id)
+            logger.debug("Duplicate event ignored: %s", event_id)
             return
 
         is_anomaly = bool(reading.get("is_anomaly", False))

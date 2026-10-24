@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS weather_readings (
     is_anomaly BOOLEAN NOT NULL DEFAULT FALSE,
     anomaly_score FLOAT NULL,
     anomaly_scenario VARCHAR(40) NULL,
+    source_type VARCHAR(32) NOT NULL DEFAULT 'simulated',
+    observation_timestamp DATETIME(3) NULL,
+    received_timestamp DATETIME(3) NULL,
+    wind_direction_deg FLOAT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_station_timestamp (station_id, event_timestamp),
     INDEX idx_anomaly_timestamp (is_anomaly, event_timestamp)
