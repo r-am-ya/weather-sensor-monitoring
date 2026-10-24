@@ -1,0 +1,21 @@
+# Kafka producer and consumer
+kafka-python==2.2.15
+
+# Database connectivity
+mysql-connector-python==9.4.0
+
+# Configuration and environment variables
+python-dotenv==1.1.1
+
+# Data processing and machine learning
+numpy==2.2.6
+pandas==2.3.2
+scikit-learn==1.7.2
+joblib==1.5.2
+
+# Interactive dashboard
+streamlit==1.50.0
+plotly==6.3.0
+
+# Testing
+pytest==8.4.2
