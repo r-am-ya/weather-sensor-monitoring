@@ -10,7 +10,12 @@ import plotly.graph_objects as go
 LATITUDE = 12.9716
 LONGITUDE = 77.5946
 API_URL = "https://api.open-meteo.com/v1/forecast"
-
+STATION_COORDS = {
+    "BLR": (12.9716, 77.5946),
+    "MUM": (19.0760, 72.8777),
+    "DEL": (28.6139, 77.2090),
+    "CHE": (13.0827, 80.2707),
+}
 
 def parse_current_response(payload: dict) -> dict:
     current = payload.get("current")
@@ -87,8 +92,9 @@ def build_wind_figure(current: dict) -> go.Figure:
     return fig
 
 
-def build_animated_wind_figure(reading: dict, source_label: str) -> go.Figure:
-    """Animate illustrative local flow from one real/simulated sensor vector.
+def build_animated_wind_figure(reading: dict, source_label: str,
+                               station_id: str = "BLR", station_name: str = "Bengaluru") -> go.Figure:
+    """Animate illustrative local flow from one sensor vector.
 
     Paths are a uniform-flow visualization around the sampled location, not a
     measured citywide field. The measured speed and direction drive the motion.
@@ -106,7 +112,7 @@ def build_animated_wind_figure(reading: dict, source_label: str) -> go.Figure:
     angle = math.radians(direction_from)
     east, north = -math.sin(angle), -math.cos(angle)
     cross_east, cross_north = -north, east
-    lat0, lon0 = LATITUDE, LONGITUDE
+    lat0, lon0 = STATION_COORDS.get(station_id, (LATITUDE, LONGITUDE))    
     lon_scale = 111.32 * math.cos(math.radians(lat0))
 
     def position(along_km: float, across_km: float) -> tuple[float, float]:
@@ -151,7 +157,7 @@ def build_animated_wind_figure(reading: dict, source_label: str) -> go.Figure:
                 "color": [speed] * particle_count,
                 "colorscale": [[0, "#43d9c3"], [0.5, "#74d7a5"], [1, "#ffbd69"]],
                 "cmin": 0, "cmax": 40, "showscale": True,
-                "colorbar": {"title": {"text": "Wind · km/h", "font": {"color": "#d4e5ef"}},
+                "colorbar": {"title": {"text": "km/h", "font": {"color": "#d4e5ef"}},
                              "tickfont": {"color": "#d4e5ef"}}},
         customdata=custom,
         hovertemplate=("%{customdata[5]}<br>Speed %{customdata[0]:.1f} km/h · "
@@ -163,32 +169,36 @@ def build_animated_wind_figure(reading: dict, source_label: str) -> go.Figure:
     fig.add_trace(go.Scattergeo(
         lon=[lon0], lat=[lat0], mode="markers+text",
         marker={"size": 14, "color": "#f2fbfd", "line": {"width": 2, "color": "#43d9c3"}},
-        text=["BLR"], textposition="top center", textfont={"color": "#f2fbfd"},
+        text=[station_id], textposition="top center", textfont={"color": "#f2fbfd"},
         customdata=[[speed, direction_from, temperature, humidity, observed_at]],
-        hovertemplate=("Bengaluru sensor<br>Speed %{customdata[0]:.1f} km/h · "
+        hovertemplate=(station_name + " sensor<br>Speed %{customdata[0]:.1f} km/h · "
                        "Direction %{customdata[1]:.0f}°<br>Temperature %{customdata[2]:.1f}°C · "
                        "Humidity %{customdata[3]:.0f}%<br>Observation %{customdata[4]}"
                        "<extra></extra>"),
-        name="Bengaluru sensor",
+        name=f"{station_name} sensor",
     ))
 
-    frame_count = 18
+    frames_per_cycle = 30
+    cycles = 4
+    frame_count = frames_per_cycle * cycles
     fig.frames = [go.Frame(
         name=str(frame_index),
-        data=[go.Scattergeo(lon=particle_positions(frame_index / frame_count)[0],
-                            lat=particle_positions(frame_index / frame_count)[1])],
+        data=[go.Scattergeo(lon=particle_positions(frame_index / frames_per_cycle)[0],
+                            lat=particle_positions(frame_index / frames_per_cycle)[1])],
         traces=[particle_trace],
     ) for frame_index in range(frame_count)]
-    duration_ms = max(700, int(4800 - min(speed, 40.0) * 85))
+    # Faster wind -> shorter frame time -> particles move faster.
+    duration_ms = max(40, int(160 - min(speed, 40.0) * 3))
     fig.update_geos(
         scope="asia", projection_type="mercator", showland=True, landcolor="#132b3c",
         showocean=True, oceancolor="#091823", showcountries=True, countrycolor="#365064",
-        lataxis_range=[12.65, 13.30], lonaxis_range=[77.25, 77.95], showcoastlines=False,
+        lataxis_range=[lat0 - 0.33, lat0 + 0.33], lonaxis_range=[lon0 - 0.35, lon0 + 0.35], showcoastlines=False,
     )
     fig.update_layout(
-        height=470, margin={"l": 0, "r": 0, "t": 6, "b": 0},
+        height=470, margin={"l": 0, "r": 0, "t": 6, "b": 50},
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        legend={"font": {"color": "#d4e5ef"}, "bgcolor": "rgba(7,17,27,.55)"},
+        legend={"font": {"color": "#d4e5ef"}, "bgcolor": "rgba(7,17,27,.55)",
+        "orientation": "h", "x": 0, "xanchor": "left", "y": -0.06, "yanchor": "top"},
         updatemenus=[{"type": "buttons", "direction": "left", "x": 0.02, "y": 0.03,
                        "showactive": False, "bgcolor": "#15394a", "font": {"color": "#effafa"},
                        "buttons": [

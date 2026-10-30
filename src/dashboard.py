@@ -10,7 +10,7 @@ from src.config import DASHBOARD_REFRESH_SECONDS, OPEN_METEO_INTERVAL_SECONDS, S
 from src.database import get_connection
 from src.weather_visuals import build_animated_wind_figure, fetch_bengaluru_current
 
-st.set_page_config(page_title="WeatherPulse · Bengaluru", page_icon="🌦️", layout="wide")
+st.set_page_config(page_title="WeatherPulse", page_icon="🌦️", layout="wide")
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
@@ -33,7 +33,7 @@ h2,h3 {font-family:Manrope,sans-serif!important;color:#eaf7fa!important} .stCapt
 .status-pill {display:inline-block;border-radius:99px;padding:6px 12px;background:#123c39;color:#71e3c9;border:1px solid #286c5e;font-size:12px;font-weight:700}
 .status-stale {display:inline-block;border-radius:99px;padding:6px 12px;background:#44331b;color:#ffd27d;border:1px solid #78602f;font-size:12px;font-weight:700}
 </style>
-<div class="wp-header"><div class="wp-icon"><div class="wp-cloud"></div><div class="wp-dash one"></div><div class="wp-dash two"></div></div><div><div class="wp-title">WeatherPulse</div><div class="wp-sub">Bengaluru · Real-time weather stream analytics</div></div></div>
+<div class="wp-header"><div class="wp-icon"><div class="wp-cloud"></div><div class="wp-dash one"></div><div class="wp-dash two"></div></div><div><div class="wp-title">WeatherPulse</div><div class="wp-sub">Real-time weather stream analytics</div></div></div>
 """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=10, show_spinner=False)
@@ -101,29 +101,35 @@ k[3].metric("Pipeline / anomalies", "LIVE" if pipeline_ok else "STALE", f"{anom_
 
 left, right = st.columns([1.2, .8])
 with left:
-    st.subheader("Bengaluru wind")
+    station_name = (stations.loc[stations.station_id == selected_station, "station_name"].iloc[0]
+                    if not stations.empty and (stations.station_id == selected_station).any() else "Bengaluru")
+    st.subheader(f"{station_name} wind")
     if WEATHER_SOURCE == "open_meteo":
-        try:
-            with st.spinner("Loading current Open-Meteo conditions…"):
-                current = load_live_current()
-            st.plotly_chart(build_animated_wind_figure(current, "Open-Meteo current sample"), use_container_width=True, config={"displayModeBar": False})
-            st.caption(f"Animated particle paths are illustrative and driven by the Bengaluru API sample observed {current['observation_timestamp']} Asia/Kolkata. They are not observed streamlines or a measured spatial wind field.")
-            m = st.columns(4)
-            m[0].metric("Live temperature", f"{current['temperature_c']:.1f} °C")
-            m[1].metric("Live humidity", f"{current['humidity_pct']:.0f}%")
-            m[2].metric("Live wind", f"{current['wind_speed_kmh']:.1f} km/h")
-            m[3].metric("Direction", f"{current['wind_direction_deg']:.0f}°")
-        except Exception as exc:
-            st.warning("Open-Meteo is temporarily unavailable. Showing no fabricated map data.")
-            st.caption(str(exc))
-    else:
-        blr = readings[(readings["station_id"] == "BLR") & readings["wind_direction_deg"].notna()].copy() if not readings.empty else pd.DataFrame()
-        if blr.empty:
-            st.info("Waiting for the next directional Bengaluru sensor event. Restart the producer after enabling the updated simulator.")
+        if selected_station != "BLR":
+            st.info("Live Open-Meteo data is fetched for Bengaluru only. Select Bengaluru to see the live wind map.")
         else:
-            sample = blr.sort_values("event_timestamp").iloc[-1].to_dict()
-            st.plotly_chart(build_animated_wind_figure(sample, "Simulated Bengaluru sensor"), use_container_width=True, config={"displayModeBar": False})
-            st.caption(f"Live simulated flow driven by the latest processed Bengaluru event: {sample['wind_speed_kmh']:.1f} km/h from {sample['wind_direction_deg']:.0f}°. Particle motion and paths are illustrative; one sensor does not measure a citywide wind field.")
+            try:
+                with st.spinner("Loading current Open-Meteo conditions…"):
+                    current = load_live_current()
+                st.plotly_chart(build_animated_wind_figure(current, "Open-Meteo current sample"), use_container_width=True, config={"displayModeBar": False})
+                st.caption(f"Animated particle paths are illustrative and driven by the Bengaluru API sample observed {current['observation_timestamp']} Asia/Kolkata. They are not observed streamlines or a measured spatial wind field.")
+                m = st.columns(4)
+                m[0].metric("Live temperature", f"{current['temperature_c']:.1f} °C")
+                m[1].metric("Live humidity", f"{current['humidity_pct']:.0f}%")
+                m[2].metric("Live wind", f"{current['wind_speed_kmh']:.1f} km/h")
+                m[3].metric("Direction", f"{current['wind_direction_deg']:.0f}°")
+            except Exception as exc:
+                st.warning("Open-Meteo is temporarily unavailable. Showing no fabricated map data.")
+                st.caption(str(exc))
+    else:
+        rows = readings[(readings["station_id"] == selected_station) & readings["wind_direction_deg"].notna()].copy() if not readings.empty else pd.DataFrame()
+        if rows.empty:
+            st.info(f"Waiting for the next directional {station_name} sensor event.")
+        else:
+            sample = rows.sort_values("event_timestamp").iloc[-1].to_dict()
+            st.plotly_chart(build_animated_wind_figure(sample, f"Simulated {station_name} sensor", selected_station, station_name),
+                            use_container_width=True, config={"displayModeBar": False})
+            st.caption(f"Live simulated flow driven by the latest processed {station_name} event: {sample['wind_speed_kmh']:.1f} km/h from {sample['wind_direction_deg']:.0f}°. Particle motion and paths are illustrative; one sensor does not measure a citywide wind field.")
 with right:
     st.subheader("Current stations")
     if stations.empty:

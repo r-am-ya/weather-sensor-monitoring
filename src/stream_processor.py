@@ -11,6 +11,7 @@ from statistics import mean
 import joblib
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
+from mysql.connector import Error as MySQLError
 
 from src.config import (
     KAFKA_BOOTSTRAP_SERVERS,
@@ -321,7 +322,7 @@ def run_processor() -> None:
                 save_reading(processed_reading)
                 total_processed += 1
 
-            except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            except (ValueError, TypeError, KeyError, json.JSONDecodeError, MySQLError):
                 logger.exception(
                     "Skipping invalid event at partition=%s offset=%s",
                     message.partition,
